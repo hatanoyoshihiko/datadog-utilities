@@ -35,13 +35,12 @@ graph TD
     DatadogInviteDisableFunctionRole --> DatadogUserInvitePolicy
     DatadogUserInvitePolicy --> UploadBucket
     DatadogUserInvitePolicy --> MySecret
-
 ```
 
 ## Files
 
 ```text
-project-root/
+user-inveite-and-disable/
 ├── src/                            # Lambda source code
 │   └── app.py
 ├── layer/                          # Lambda Layer（include de pendency）
