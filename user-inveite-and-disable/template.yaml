@@ -1,0 +1,117 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  ProjectName:
+    Type: String
+  SourceBucketName:
+    Type: String
+  SecretName:
+    Type: String
+    Default: ddOrgSecret
+  LambdaRoleName:
+    Type: String
+  ManagedPolicyName:
+    Type: String
+  InlinePolicyName:
+    Type: String
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 30
+    MemorySize: 256
+    Tracing: Active
+
+Resources:
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref SourceBucketName
+
+  DependenciesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub "${ProjectName}-deps"
+      ContentUri: layer/
+      CompatibleRuntimes: [python3.13]
+      RetentionPolicy: Retain
+    Metadata:
+      BuildMethod: python3.13
+      BuildArchitecture: x86_64
+
+  DatadogUserInviteManagedPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Ref InlinePolicyName
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: s3:GetObject
+            Resource: !Sub arn:aws:s3:::${SourceBucketName}/*
+          - Effect: Allow
+            Action: s3:DeleteObject
+            Resource: !Sub arn:aws:s3:::${SourceBucketName}/*
+          - Effect: Allow
+            Action: secretsmanager:GetSecretValue
+            Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${SecretName}-*
+
+  DDInviteFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref LambdaRoleName
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - !Ref DatadogUserInviteManagedPolicy
+
+  DDInviteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}"
+      CodeUri: src/
+      Handler: app.lambda_handler
+      Role: !GetAtt DDInviteFunctionRole.Arn
+      Environment:
+        Variables:
+          SECRET_NAME: !Ref SecretName
+      Layers:
+        - !Ref DependenciesLayer
+      Events:
+        S3UploadCreate:
+          Type: S3
+          Properties:
+            Bucket: !Ref UploadBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: create_user.csv
+        S3UploadDelete:
+          Type: S3
+          Properties:
+            Bucket: !Ref UploadBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: delete_user.csv
+
+  PythonRequirementsLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: datadog-api-client-layer
+      ContentUri: .
+      CompatibleRuntimes:
+        - python3.13
