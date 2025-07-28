@@ -125,7 +125,7 @@ def delete_user(keys: Tuple[str, str], email: str) -> None:
         users_api = UsersApi(api_client)
         try:
             # ユーザ一覧から対象ユーザを検索
-            users = users_api.list_users().data
+            users = list(users_api.list_users_with_pagination())
             user = next((u for u in users if u.attributes.email.lower() == email.lower()), None)
             if not user:
                 LOGGER.warning("User not found for deletion: %s", email)
