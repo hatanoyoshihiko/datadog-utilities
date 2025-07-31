@@ -103,7 +103,7 @@ def create_and_invite_user(keys: Tuple[str, str], name: str, email: str, role_id
         )
         try:
             invite_resp = users_api.send_invitations(body=invite_body)
-            LOGGER.info("[SendInvite] %s → invitations sent=%s", email, invite_resp.meta.pagination.total_count)
+            LOGGER.info("[SendInvite] %s → invitations sent", email)
         except Exception:
             LOGGER.exception("Failed to send invitation to: %s", email)
             raise
